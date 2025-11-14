@@ -321,7 +321,6 @@ async def generate_daily_summary():
         if tomorrow_events:
             lines.append("📋 Review tomorrow's schedule tonight")
 
-        lines.append("💧 Stay hydrated and take breaks!")
         lines.append("=" * 60)
 
         return "\n".join(lines)

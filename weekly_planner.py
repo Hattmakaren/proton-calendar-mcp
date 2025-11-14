@@ -471,7 +471,6 @@ def format_planning_tips(workload: Dict[str, any], overdue_count: int) -> str:
     # General tips
     lines.append("📋 Review this plan at the start of each day")
     lines.append("✅ Update Trello cards as you complete tasks")
-    lines.append("💧 Remember to take breaks and stay hydrated!")
     lines.append("=" * 60)
 
     return "\n".join(lines)
