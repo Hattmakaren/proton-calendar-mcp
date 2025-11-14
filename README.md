@@ -50,30 +50,29 @@ cd proton-calendar-mcp
 pip install -r requirements.txt
 ```
 
-### 3. Set Environment Variables
+### 3. Configure Environment Variables
 
-#### Required: Proton Calendar URL
+All configuration is managed through a centralized `.env` file in the `proton-calendar-mcp` directory.
 
-Set the `PROTON_CALENDAR_URL` environment variable to your calendar's share URL:
+#### Create the .env file
 
-**Windows (PowerShell):**
-```powershell
-$env:PROTON_CALENDAR_URL="https://calendar.proton.me/api/calendar/v1/url/YOUR_CALENDAR_ID/calendar.ics"
-```
+Create a file named `.env` in the `proton-calendar-mcp` directory with the following content:
 
-**Windows (Command Prompt):**
-```cmd
-set PROTON_CALENDAR_URL=https://calendar.proton.me/api/calendar/v1/url/YOUR_CALENDAR_ID/calendar.ics
-```
-
-**Linux/Mac:**
 ```bash
-export PROTON_CALENDAR_URL="https://calendar.proton.me/api/calendar/v1/url/YOUR_CALENDAR_ID/calendar.ics"
+# Proton Calendar Configuration (Required)
+PROTON_CALENDAR_URL=https://calendar.proton.me/api/calendar/v1/url/YOUR_CALENDAR_ID/calendar.ics
+
+# Trello Configuration (Optional - for task integration)
+TRELLO_API_KEY=your_trello_api_key_here
+TRELLO_TOKEN=your_trello_token_here
+
+# Optional: Comma-separated list of board IDs to monitor (leave empty for all boards)
+TRELLO_BOARD_IDS=
 ```
 
-#### Optional: Trello Integration
+#### Get your Trello credentials (Optional)
 
-To enable Trello integration, you need to set up Trello API credentials:
+To enable Trello integration:
 
 1. **Get your Trello API Key:**
    - Go to https://trello.com/power-ups/admin
@@ -85,57 +84,38 @@ To enable Trello integration, you need to set up Trello API credentials:
    - Replace `YOUR_API_KEY` with your actual API key
    - Click "Allow" to generate your token
 
-3. **Set environment variables:**
+3. **Add credentials to .env file:**
+   - Update `TRELLO_API_KEY` with your API key
+   - Update `TRELLO_TOKEN` with your token
+   - Optionally set `TRELLO_BOARD_IDS` to specific board IDs (comma-separated)
 
-**Windows (PowerShell):**
-```powershell
-$env:TRELLO_API_KEY="your_api_key_here"
-$env:TRELLO_TOKEN="your_token_here"
-$env:TRELLO_BOARD_IDS="board_id_1,board_id_2"  # Optional: comma-separated board IDs
-```
-
-**Linux/Mac:**
-```bash
-export TRELLO_API_KEY="your_api_key_here"
-export TRELLO_TOKEN="your_token_here"
-export TRELLO_BOARD_IDS="board_id_1,board_id_2"  # Optional: comma-separated board IDs
-```
-
-**Note:** If `TRELLO_BOARD_IDS` is not set, the server will fetch cards from all your boards.
+**Note:**
+- The `.env` file is gitignored for security
+- If `TRELLO_BOARD_IDS` is not set, the server will fetch cards from all your boards
+- All scripts (MCP server, daily_summary, trello_client) use this centralized configuration
 
 ### 4. Register with Claude Code
 
-Register the MCP server with Claude Code using stdio transport:
+Register the MCP server with Claude Code using stdio transport. Since all configuration is in the `.env` file, the registration is simple:
 
-**With Trello integration:**
 ```bash
-claude mcp add --transport stdio proton-calendar \
-  --env PROTON_CALENDAR_URL="YOUR_CALENDAR_URL" \
-  --env TRELLO_API_KEY="YOUR_TRELLO_KEY" \
-  --env TRELLO_TOKEN="YOUR_TRELLO_TOKEN" \
-  --env TRELLO_BOARD_IDS="board_id_1,board_id_2" \
-  -- python /path/to/server.py
+claude mcp add --transport stdio proton-calendar -- python /path/to/proton-calendar-mcp/server.py
 ```
 
-**Without Trello (calendar only):**
+**Example for Windows:**
 ```bash
-claude mcp add --transport stdio proton-calendar \
-  --env PROTON_CALENDAR_URL="YOUR_CALENDAR_URL" \
-  -- python /path/to/server.py
+claude mcp add --transport stdio proton-calendar -- python C:\Users\YourName\proton-calendar-mcp\server.py
+```
+
+**Example for Linux/Mac:**
+```bash
+claude mcp add --transport stdio proton-calendar -- python /home/yourname/proton-calendar-mcp/server.py
 ```
 
 **Important:**
-- Replace `YOUR_CALENDAR_URL` with your actual Proton Calendar URL
-- Replace Trello credentials with your actual API key and token
-- Update the path to match where you saved `server.py`
-- For Windows, use backslashes: `C:\path\to\server.py`
-- `TRELLO_BOARD_IDS` is optional - omit to fetch from all boards
-
-**Alternative:** Set environment variables system-wide, then register without the `--env` flags:
-
-```bash
-claude mcp add --transport stdio proton-calendar -- python /path/to/server.py
-```
+- Update the path to match where you saved the project
+- The server will automatically load configuration from the `.env` file
+- No need to pass environment variables via `--env` flags
 
 ### 5. Verify Installation
 
@@ -175,7 +155,7 @@ Claude Code will automatically use the appropriate tools to fetch and display yo
 
 ### Daily Summary Agent
 
-The project includes a **daily summary agent** that provides an intelligent overview of your day:
+The project includes a **daily summary agent** that provides an intelligent overview combining both calendar events and Trello tasks:
 
 ```bash
 cd proton-calendar-mcp
@@ -183,17 +163,31 @@ python daily_summary.py
 ```
 
 **Features:**
-- 📅 Shows today's complete schedule
-- 🔮 Previews tomorrow's events
+- ⚠️ Shows overdue Trello tasks (with days overdue)
+- 📅 Shows today's complete schedule (calendar + Trello tasks)
+- 🔮 Previews tomorrow's events and tasks
 - 🎯 Suggests preparation needed for tomorrow's meetings
 - 💡 Provides helpful tips (early morning alerts, back-to-back meeting warnings)
 - ⏰ Highlights important scheduling considerations
+
+**Note:** The daily summary automatically loads configuration from the `.env` file, including Trello integration if configured.
 
 **Example output:**
 ```
 ============================================================
 📅 DAILY SUMMARY
-🗓️  Thursday, November 13, 2025
+🗓️  Friday, November 14, 2025
+============================================================
+
+⚠️  OVERDUE TASKS
+------------------------------------------------------------
+• Ring om Gästhuset hyresgäst
+  📋 Quest log → Weekly commitment
+  ⏰ Due: 2025-11-07 01:03 PM (7 days overdue)
+  🔗 https://trello.com/c/UYSzpJhy/...
+
+📊 You have 1 overdue task(s) - prioritize these!
+
 ============================================================
 
 🌟 TODAY'S SCHEDULE
@@ -205,9 +199,20 @@ python daily_summary.py
 
 📊 You have 1 event(s) scheduled today
 
+------------------------------------------------------------
+📝 TODAY'S TASKS (Trello)
+------------------------------------------------------------
+• Review pull request
+  📋 Quest log → Weekly commitment
+  ⏰ Due: 04:00 PM
+  🏷️  Development
+  🔗 https://trello.com/c/abc123/...
+
+📊 You have 1 task(s) due today
+
 ============================================================
 🔮 PREPARE FOR TOMORROW
-📆 Friday, November 14, 2025
+📆 Saturday, November 15, 2025
 ------------------------------------------------------------
 • Product Demo
   ⏰ 10:00 AM - 11:00 AM
@@ -223,6 +228,7 @@ python daily_summary.py
 ============================================================
 💡 TIPS
 ------------------------------------------------------------
+🚨 You have overdue tasks - prioritize completing these first!
 📋 Review tomorrow's schedule tonight
 💧 Stay hydrated and take breaks!
 ============================================================
@@ -462,6 +468,7 @@ The test suite includes:
 - `icalendar>=6.0.0` - RFC 5545 compliant iCalendar parser
 - `httpx>=0.27.0` - Modern async HTTP client
 - `py-trello>=0.19.0` - Trello API client library
+- `python-dotenv>=1.0.0` - Environment variable management from .env files
 - `pytest>=8.0.0` - Testing framework
 - `pytest-asyncio>=0.23.0` - Async support for pytest
 
@@ -481,8 +488,9 @@ The test suite includes:
 ### Calendar Issues
 
 **"PROTON_CALENDAR_URL environment variable is not set"**
-- Make sure you've set the environment variable before running the server
-- You can either set it system-wide or pass via `--env` flag when registering with Claude Code
+- Make sure you've created the `.env` file in the `proton-calendar-mcp` directory
+- Verify the `.env` file contains the `PROTON_CALENDAR_URL` setting
+- Check that the `.env` file is in the same directory as `server.py`
 
 **"Error fetching calendar: [HTTP error]"**
 - Verify your calendar URL is correct
@@ -498,14 +506,14 @@ The test suite includes:
 ### Trello Issues
 
 **Trello tools not appearing**
-- Verify `TRELLO_API_KEY` and `TRELLO_TOKEN` are set correctly
-- Check that credentials are passed to the MCP server via `--env` flags or system environment
-- Restart Claude Code after setting environment variables
+- Verify `TRELLO_API_KEY` and `TRELLO_TOKEN` are set in your `.env` file
+- Check that the credentials are correct
+- Restart the MCP server: `claude mcp remove proton-calendar -s local` then re-add it
 
 **"Error: Trello is not configured"**
-- This means the Trello credentials are missing or invalid
-- Double-check your API key and token
-- Ensure environment variables are set before the server starts
+- This means the Trello credentials are missing or invalid in the `.env` file
+- Double-check your API key and token in `.env`
+- Ensure the `.env` file is in the correct location (`proton-calendar-mcp` directory)
 
 **No cards returned from Trello**
 - Verify you have cards with due dates in your boards
@@ -550,6 +558,9 @@ proton-calendar-mcp/
 ├── daily_summary.py                   # Daily summary agent with intelligent prep suggestions
 ├── requirements.txt                   # Python dependencies
 ├── pytest.ini                         # Pytest configuration
+├── .env                               # Centralized configuration file (create this, gitignored)
+├── .env.example                       # Example configuration template
+├── .gitignore                         # Git ignore rules
 ├── README.md                          # This file
 └── tests/
     ├── test_calendar_fetch.py         # Calendar MCP server test suite

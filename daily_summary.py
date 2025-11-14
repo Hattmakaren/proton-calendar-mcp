@@ -8,8 +8,15 @@ import asyncio
 import os
 from datetime import datetime, timedelta
 from typing import List, Dict
+from pathlib import Path
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+env_path = Path(__file__).parent / '.env'
+load_dotenv(dotenv_path=env_path)
 
 from server import fetch_calendar, filter_events_by_date_range
+from trello_client import get_trello_client
 
 
 def analyze_preparation_needs(event: Dict) -> List[str]:
@@ -116,6 +123,59 @@ def format_event_summary(event: Dict, show_prep: bool = False) -> str:
     return "\n".join(lines)
 
 
+def format_trello_card(card: Dict, show_overdue: bool = False) -> str:
+    """
+    Format a single Trello card for display.
+
+    Args:
+        card: Card dictionary from Trello
+        show_overdue: Whether to show overdue information
+
+    Returns:
+        Formatted card string
+    """
+    lines = []
+
+    # Card title and board
+    lines.append(f"• {card['name']}")
+    lines.append(f"  📋 {card['board_name']} → {card['list_name']}")
+
+    # Due date
+    if card['due_date']:
+        due_time = card['due_date'].strftime("%I:%M %p")
+        if show_overdue:
+            now = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+            card_due = card['due_date'].replace(hour=0, minute=0, second=0, microsecond=0, tzinfo=None)
+            days_overdue = (now - card_due).days
+            lines.append(f"  ⏰ Due: {card['due_date'].strftime('%Y-%m-%d')} {due_time} ({days_overdue} days overdue)")
+        else:
+            lines.append(f"  ⏰ Due: {due_time}")
+
+    # Labels
+    if card['labels']:
+        labels_str = ", ".join(card['labels'])
+        lines.append(f"  🏷️  {labels_str}")
+
+    # Checklist progress
+    if card['checklist_total'] > 0:
+        progress = f"{card['checklist_completed']}/{card['checklist_total']}"
+        lines.append(f"  ✓ Checklist: {progress}")
+
+    # Description (truncated)
+    if card['description']:
+        desc = card['description']
+        if len(desc) > 100:
+            desc = desc[:97] + "..."
+        if "\n" in desc:
+            desc = desc.split("\n")[0]
+        lines.append(f"  📝 {desc}")
+
+    # URL
+    lines.append(f"  🔗 {card['url']}")
+
+    return "\n".join(lines)
+
+
 async def generate_daily_summary():
     """
     Generate a comprehensive daily summary.
@@ -127,6 +187,9 @@ async def generate_daily_summary():
 
     if not calendar_url:
         return "❌ Error: PROTON_CALENDAR_URL environment variable is not set."
+
+    # Initialize Trello client (optional)
+    trello_client = get_trello_client()
 
     try:
         # Fetch calendar
@@ -142,6 +205,19 @@ async def generate_daily_summary():
         tomorrow_end = tomorrow_start + timedelta(days=1)
         tomorrow_events = filter_events_by_date_range(cal, tomorrow_start, tomorrow_end)
 
+        # Fetch Trello cards if client is available
+        overdue_cards = []
+        today_cards = []
+        tomorrow_cards = []
+        if trello_client:
+            try:
+                overdue_cards = trello_client.get_overdue_cards()
+                today_cards = trello_client.get_cards_due_today()
+                tomorrow_cards = trello_client.get_cards_due_tomorrow()
+            except Exception as e:
+                # Silently skip Trello if there's an error
+                pass
+
         # Build summary
         lines = []
         lines.append("=" * 60)
@@ -149,6 +225,18 @@ async def generate_daily_summary():
         lines.append(f"🗓️  {today_start.strftime('%A, %B %d, %Y')}")
         lines.append("=" * 60)
         lines.append("")
+
+        # Overdue Trello cards
+        if overdue_cards:
+            lines.append("⚠️  OVERDUE TASKS")
+            lines.append("-" * 60)
+            for card in overdue_cards:
+                lines.append(format_trello_card(card, show_overdue=True))
+                lines.append("")
+            lines.append(f"📊 You have {len(overdue_cards)} overdue task(s) - prioritize these!")
+            lines.append("")
+            lines.append("=" * 60)
+            lines.append("")
 
         # Today's schedule
         lines.append("🌟 TODAY'S SCHEDULE")
@@ -163,6 +251,17 @@ async def generate_daily_summary():
             lines.append("")
         else:
             lines.append("✨ No events scheduled for today!")
+            lines.append("")
+
+        # Today's Trello cards
+        if today_cards:
+            lines.append("-" * 60)
+            lines.append("📝 TODAY'S TASKS (Trello)")
+            lines.append("-" * 60)
+            for card in today_cards:
+                lines.append(format_trello_card(card))
+                lines.append("")
+            lines.append(f"📊 You have {len(today_cards)} task(s) due today")
             lines.append("")
 
         # Tomorrow's preparation
@@ -185,10 +284,24 @@ async def generate_daily_summary():
             lines.append("✨ No events scheduled for tomorrow")
             lines.append("")
 
+        # Tomorrow's Trello cards
+        if tomorrow_cards:
+            lines.append("-" * 60)
+            lines.append("📝 TOMORROW'S TASKS (Trello)")
+            lines.append("-" * 60)
+            for card in tomorrow_cards:
+                lines.append(format_trello_card(card))
+                lines.append("")
+            lines.append(f"📊 You have {len(tomorrow_cards)} task(s) due tomorrow")
+            lines.append("")
+
         # General tips
         lines.append("=" * 60)
         lines.append("💡 TIPS")
         lines.append("-" * 60)
+
+        if overdue_cards:
+            lines.append("🚨 You have overdue tasks - prioritize completing these first!")
 
         if today_events:
             # Check for early morning events

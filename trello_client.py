@@ -7,7 +7,13 @@ Provides functions to fetch and filter Trello cards by due dates.
 import os
 from datetime import datetime, date
 from typing import List, Dict, Optional
+from pathlib import Path
+from dotenv import load_dotenv
 from trello import TrelloClient
+
+# Load environment variables from .env file
+env_path = Path(__file__).parent / '.env'
+load_dotenv(dotenv_path=env_path)
 
 
 class TrelloCardFetcher:
