@@ -21,9 +21,10 @@ An MCP (Model Context Protocol) server that provides read-only access to your Pr
 - **Rich card details**: Labels, checklists, descriptions, board/list info
 - **Automatic board filtering** via environment variable
 
-### Other Features
-- **Comprehensive tests** to ensure reliable data fetching
-- **Daily summary agent** with intelligent preparation suggestions
+### Planning Agents
+- **Daily summary agent** with intelligent preparation suggestions for today and tomorrow
+- **Weekly planner agent** with monthly overview and intelligent task suggestions
+- Both agents include workload analysis and smart planning tips
 
 ## Prerequisites
 
@@ -252,6 +253,52 @@ Example cron entry (run daily at 7 AM):
 0 7 * * * cd /path/to/proton-calendar-mcp && python daily_summary.py
 ```
 
+### Weekly Planner Agent
+
+The project includes a **weekly planner agent** that analyzes the next month and suggests tasks for the upcoming week:
+
+```bash
+cd proton-calendar-mcp
+python weekly_planner.py
+```
+
+**Features:**
+- 📅 Monthly overview with 4 weeks of upcoming events and deadlines grouped by week
+- ⚠️ Overdue tasks highlighted with urgent attention needed
+- 📆 This week's complete schedule with preparation suggestions
+- ✅ Intelligent task suggestions based on:
+  - Due dates and priorities
+  - Available time between calendar events
+  - Workload balance across the week
+- 💡 Planning tips with workload assessment (busy/moderate/light week)
+- 🎯 Preparation suggestions for important events (meetings, presentations, etc.)
+
+**Note:** The weekly planner automatically loads configuration from the `.env` file, including Trello integration if configured.
+
+**Output Sections:**
+
+1. **Monthly Overview (4 weeks):**
+   - Events and tasks grouped by week
+   - Quick counts and highlights
+   - Helps identify busy vs. light weeks ahead
+
+2. **This Week's Focus:**
+   - Overdue tasks requiring urgent attention
+   - Complete schedule with event details
+   - Preparation suggestions for meetings/presentations
+   - Intelligently suggested tasks with priority levels (🔴 urgent, 🟠 high, 🟡 medium, 🟢 normal)
+
+3. **Planning Tips:**
+   - Workload assessment for the week
+   - Free days available for focused work
+   - Reminders to review and update tasks
+
+**Automation tip:** Schedule this to run weekly (e.g., Sunday evening or Monday morning):
+```bash
+# Run weekly on Sunday at 8 PM
+0 20 * * 0 cd /path/to/proton-calendar-mcp && python weekly_planner.py
+```
+
 ## Available Tools
 
 ### Calendar Tools
@@ -462,6 +509,14 @@ The test suite includes:
 3. **format_event_summary()**: User-friendly event formatting
 4. **Smart tips**: Early morning alerts, back-to-back meeting warnings
 
+**Weekly Planner Agent (weekly_planner.py):**
+1. **generate_weekly_planner()**: Creates comprehensive weekly/monthly overview
+2. **calculate_weekly_workload()**: Analyzes calendar density and free time
+3. **suggest_weekly_tasks()**: Intelligent task selection based on priorities and workload
+4. **group_by_week()**: Groups events and tasks into weekly buckets
+5. **format_monthly_overview()**: Creates 4-week lookahead summary
+6. **Planning intelligence**: Workload assessment and task distribution recommendations
+
 ### Dependencies
 
 - `mcp>=1.0.0` - Official Model Context Protocol SDK
@@ -556,6 +611,7 @@ proton-calendar-mcp/
 ├── server.py                          # Main MCP server implementation
 ├── trello_client.py                   # Trello API client module
 ├── daily_summary.py                   # Daily summary agent with intelligent prep suggestions
+├── weekly_planner.py                  # Weekly planner agent with monthly overview
 ├── requirements.txt                   # Python dependencies
 ├── pytest.ini                         # Pytest configuration
 ├── .env                               # Centralized configuration file (create this, gitignored)
