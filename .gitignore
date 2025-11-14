@@ -145,3 +145,4 @@ Thumbs.db
 # Project specific
 *.ics
 calendar_cache/
+PROJECT_CONTEXT.md
