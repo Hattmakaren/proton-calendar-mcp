@@ -2,6 +2,7 @@
 """
 Proton Calendar MCP Server
 Fetches calendar data from a read-only Proton Calendar URL and exposes it via MCP.
+Optionally integrates with Trello for task management.
 """
 
 import asyncio
@@ -16,12 +17,17 @@ from mcp.server import Server
 from mcp.server.stdio import stdio_server
 from mcp.types import Tool, TextContent
 
+from trello_client import get_trello_client
+
 
 # Initialize the MCP server
 app = Server("proton-calendar-server")
 
 # Global variable to store the calendar URL
 CALENDAR_URL = os.getenv("PROTON_CALENDAR_URL", "")
+
+# Initialize Trello client (optional)
+TRELLO_CLIENT = get_trello_client()
 
 
 async def fetch_calendar(url: str) -> Calendar:
@@ -118,7 +124,7 @@ def filter_events_by_date_range(
 @app.list_tools()
 async def list_tools() -> list[Tool]:
     """List available MCP tools."""
-    return [
+    tools = [
         Tool(
             name="get_today_events",
             description="Get all calendar events for today from your Proton Calendar",
@@ -156,6 +162,58 @@ async def list_tools() -> list[Tool]:
             },
         ),
     ]
+
+    # Add Trello tools if Trello is configured
+    if TRELLO_CLIENT:
+        tools.extend([
+            Tool(
+                name="get_trello_cards_today",
+                description="Get all Trello cards due today from your configured boards",
+                inputSchema={
+                    "type": "object",
+                    "properties": {},
+                    "required": [],
+                },
+            ),
+            Tool(
+                name="get_trello_cards_tomorrow",
+                description="Get all Trello cards due tomorrow from your configured boards",
+                inputSchema={
+                    "type": "object",
+                    "properties": {},
+                    "required": [],
+                },
+            ),
+            Tool(
+                name="get_trello_overdue_cards",
+                description="Get all overdue Trello cards (past due date) from your configured boards",
+                inputSchema={
+                    "type": "object",
+                    "properties": {},
+                    "required": [],
+                },
+            ),
+            Tool(
+                name="get_trello_cards_date_range",
+                description="Get Trello cards due within a specific date range from your configured boards",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "start_date": {
+                            "type": "string",
+                            "description": "Start date in YYYY-MM-DD format",
+                        },
+                        "end_date": {
+                            "type": "string",
+                            "description": "End date in YYYY-MM-DD format",
+                        },
+                    },
+                    "required": ["start_date", "end_date"],
+                },
+            ),
+        ])
+
+    return tools
 
 
 @app.call_tool()
@@ -247,11 +305,136 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
 
             return [TextContent(type="text", text=result)]
 
+        # Trello tools
+        elif name == "get_trello_cards_today":
+            if not TRELLO_CLIENT:
+                return [TextContent(
+                    type="text",
+                    text="Error: Trello is not configured. Please set TRELLO_API_KEY and TRELLO_TOKEN environment variables."
+                )]
+
+            cards = TRELLO_CLIENT.get_cards_due_today()
+            if not cards:
+                return [TextContent(type="text", text="No Trello cards due today.")]
+
+            result = "Trello Cards Due Today:\n\n"
+            for card in cards:
+                result += f"• {card['name']}\n"
+                result += f"  Board: {card['board_name']} → {card['list_name']}\n"
+                if card['due_date']:
+                    result += f"  Due: {card['due_date'].strftime('%I:%M %p')}\n"
+                if card['labels']:
+                    result += f"  Labels: {', '.join(card['labels'])}\n"
+                if card['checklist_total'] > 0:
+                    result += f"  Checklist: {card['checklist_completed']}/{card['checklist_total']} completed\n"
+                if card['description']:
+                    desc = card['description'][:100] + "..." if len(card['description']) > 100 else card['description']
+                    result += f"  Description: {desc}\n"
+                result += f"  URL: {card['url']}\n\n"
+
+            return [TextContent(type="text", text=result)]
+
+        elif name == "get_trello_cards_tomorrow":
+            if not TRELLO_CLIENT:
+                return [TextContent(
+                    type="text",
+                    text="Error: Trello is not configured. Please set TRELLO_API_KEY and TRELLO_TOKEN environment variables."
+                )]
+
+            cards = TRELLO_CLIENT.get_cards_due_tomorrow()
+            if not cards:
+                return [TextContent(type="text", text="No Trello cards due tomorrow.")]
+
+            result = "Trello Cards Due Tomorrow:\n\n"
+            for card in cards:
+                result += f"• {card['name']}\n"
+                result += f"  Board: {card['board_name']} → {card['list_name']}\n"
+                if card['due_date']:
+                    result += f"  Due: {card['due_date'].strftime('%I:%M %p')}\n"
+                if card['labels']:
+                    result += f"  Labels: {', '.join(card['labels'])}\n"
+                if card['checklist_total'] > 0:
+                    result += f"  Checklist: {card['checklist_completed']}/{card['checklist_total']} completed\n"
+                if card['description']:
+                    desc = card['description'][:100] + "..." if len(card['description']) > 100 else card['description']
+                    result += f"  Description: {desc}\n"
+                result += f"  URL: {card['url']}\n\n"
+
+            return [TextContent(type="text", text=result)]
+
+        elif name == "get_trello_overdue_cards":
+            if not TRELLO_CLIENT:
+                return [TextContent(
+                    type="text",
+                    text="Error: Trello is not configured. Please set TRELLO_API_KEY and TRELLO_TOKEN environment variables."
+                )]
+
+            cards = TRELLO_CLIENT.get_overdue_cards()
+            if not cards:
+                return [TextContent(type="text", text="No overdue Trello cards. Great job!")]
+
+            result = f"Overdue Trello Cards ({len(cards)} total):\n\n"
+            for card in cards:
+                result += f"• {card['name']}\n"
+                result += f"  Board: {card['board_name']} → {card['list_name']}\n"
+                if card['due_date']:
+                    days_overdue = (datetime.now().replace(hour=0, minute=0, second=0, microsecond=0) -
+                                   card['due_date'].replace(hour=0, minute=0, second=0, microsecond=0, tzinfo=None)).days
+                    result += f"  Due: {card['due_date'].strftime('%Y-%m-%d %I:%M %p')} ({days_overdue} days overdue)\n"
+                if card['labels']:
+                    result += f"  Labels: {', '.join(card['labels'])}\n"
+                if card['checklist_total'] > 0:
+                    result += f"  Checklist: {card['checklist_completed']}/{card['checklist_total']} completed\n"
+                result += f"  URL: {card['url']}\n\n"
+
+            return [TextContent(type="text", text=result)]
+
+        elif name == "get_trello_cards_date_range":
+            if not TRELLO_CLIENT:
+                return [TextContent(
+                    type="text",
+                    text="Error: Trello is not configured. Please set TRELLO_API_KEY and TRELLO_TOKEN environment variables."
+                )]
+
+            start_date = datetime.strptime(arguments["start_date"], "%Y-%m-%d")
+            end_date = datetime.strptime(arguments["end_date"], "%Y-%m-%d")
+            end_date = end_date.replace(hour=23, minute=59, second=59)
+
+            all_cards = TRELLO_CLIENT.get_cards_from_boards()
+            cards = TRELLO_CLIENT.filter_cards_by_due_date(all_cards, start_date, end_date)
+
+            if not cards:
+                return [TextContent(
+                    type="text",
+                    text=f"No Trello cards due between {arguments['start_date']} and {arguments['end_date']}."
+                )]
+
+            result = f"Trello Cards Due {arguments['start_date']} to {arguments['end_date']}:\n\n"
+            current_date = None
+            for card in cards:
+                card_date = card['due_date'].date() if card['due_date'] else None
+
+                if card_date and card_date != current_date:
+                    current_date = card_date
+                    result += f"\n{current_date.strftime('%A, %B %d, %Y')}:\n"
+
+                result += f"  • {card['name']}\n"
+                result += f"    Board: {card['board_name']} → {card['list_name']}\n"
+                if card['due_date']:
+                    result += f"    Due: {card['due_date'].strftime('%I:%M %p')}\n"
+                if card['labels']:
+                    result += f"    Labels: {', '.join(card['labels'])}\n"
+                if card['checklist_total'] > 0:
+                    result += f"    Checklist: {card['checklist_completed']}/{card['checklist_total']} completed\n"
+                result += f"    URL: {card['url']}\n"
+
+            return [TextContent(type="text", text=result)]
+
         else:
             return [TextContent(type="text", text=f"Unknown tool: {name}")]
 
     except Exception as e:
-        return [TextContent(type="text", text=f"Error fetching calendar: {str(e)}")]
+        return [TextContent(type="text", text=f"Error: {str(e)}")]
 
 
 async def main():
